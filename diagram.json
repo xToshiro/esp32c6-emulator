@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "author": "Antigravity",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-c6-devkitc-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-sd-card", "id": "sd1", "top": -160, "left": 280, "attrs": {} },
+    { "type": "wokwi-neopixel", "id": "rgb1", "top": -80, "left": -120, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "btn_cfg", "top": 120, "left": -150, "attrs": { "color": "blue" } },
+    { "type": "wokwi-led", "id": "ext_led", "top": 200, "left": -120, "attrs": { "color": "yellow" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:7", "sd1:CS", "green", [ "v0" ] ],
+    [ "esp:20", "sd1:MOSI", "green", [ "v0" ] ],
+    [ "esp:14", "sd1:MISO", "green", [ "v0" ] ],
+    [ "esp:19", "sd1:SCK", "green", [ "v0" ] ],
+    [ "esp:3V3", "sd1:VCC", "red", [ "v0" ] ],
+    [ "esp:GND", "sd1:GND", "black", [ "v0" ] ],
+    [ "esp:8", "rgb1:DIN", "cyan", [ "v0" ] ],
+    [ "esp:3V3", "rgb1:V+", "red", [ "v0" ] ],
+    [ "esp:GND", "rgb1:GND", "black", [ "v0" ] ],
+    [ "esp:9", "btn_cfg:2.1", "blue", [ "v0" ] ],
+    [ "esp:GND", "btn_cfg:1.1", "black", [ "v0" ] ],
+    [ "esp:15", "ext_led:A", "orange", [ "v0" ] ],
+    [ "esp:GND", "ext_led:C", "black", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}

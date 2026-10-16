@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-C6 Hardware & Sensors Emulator | Sistema MOQA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP HEADER -->
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="soc-icon-wrap">
+                    <div class="soc-pulse"></div>
+                    <svg class="soc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                        <rect x="9" y="9" width="6" height="6"/>
+                        <line x1="9" y1="1" x2="9" y2="4"/>
+                        <line x1="15" y1="1" x2="15" y2="4"/>
+                        <line x1="9" y1="20" x2="9" y2="23"/>
+                        <line x1="15" y1="20" x2="15" y2="23"/>
+                        <line x1="20" y1="9" x2="23" y2="9"/>
+                        <line x1="20" y1="14" x2="23" y2="14"/>
+                        <line x1="1" y1="9" x2="4" y2="9"/>
+                        <line x1="1" y1="14" x2="4" y2="14"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="brand-title">ESP32-C6 Hardware Emulator</h1>
+                    <p class="brand-subtitle">Simulador de Arquitetura RISC-V, Periféricos I2C & Diagnóstico a Posteriori</p>
+                </div>
+            </div>
+
+            <!-- DEVICE SELECTOR FROM MOQAs.csv -->
+            <div class="header-device-select">
+                <label for="device-select" class="device-label">DISPOSITIVO ATIVO (MOQAs.csv):</label>
+                <div class="device-input-wrap">
+                    <select id="device-select" class="device-dropdown">
+                        <!-- Populated dynamically, defaults to last ID: MOQA-INFRA-048 -->
+                        <option value="MOQA-INFRA-048" selected>MOQA-INFRA-048 (Padrão)</option>
+                    </select>
+                    <span class="token-preview" id="token-preview" title="Token da API Vitae">Carregando token...</span>
+                </div>
+            </div>
+
+            <div class="header-badges">
+                <div class="status-badge" id="badge-mode">
+                    <span class="badge-dot dot-cyan"></span>
+                    <span class="badge-label">MODO:</span>
+                    <strong id="mode-text">COLETA</strong>
+                </div>
+                <div class="status-badge" id="badge-warmup">
+                    <span class="badge-dot dot-blue"></span>
+                    <span class="badge-label">WARMUP:</span>
+                    <strong id="warmup-text">ATIVO (5m)</strong>
+                </div>
+                <div class="status-badge" id="badge-wifi">
+                    <span class="badge-dot dot-green"></span>
+                    <span class="badge-label">WIFI:</span>
+                    <strong id="wifi-text">192.168.1.105</strong>
+                </div>
+                <div class="status-badge" id="badge-uptime">
+                    <span class="badge-label">UPTIME:</span>
+                    <strong id="uptime-text">00:00:00</strong>
+                </div>
+            </div>
+        </header>
+
+        <!-- SIMULATION RUNTIME CONTROLS BAR -->
+        <section class="runtime-bar">
+            <div class="runtime-controls">
+                <button class="btn-ctrl btn-play" id="btn-toggle-play">
+                    <span id="play-icon">⏸️</span> <span id="play-text">Pausar Simulação</span>
+                </button>
+                <button class="btn-ctrl btn-reset" id="btn-reboot">
+                    🔄 Reiniciar ESP32 (Soft Reset)
+                </button>
+                
+                <div class="realtime-status-pill" title="A emulação opera estritamente em tempo real 1.0x (1 segundo real = 1 segundo de hardware) para preservar cadência física e tempos de estabilização dos sensores.">
+                    <span class="badge-dot dot-green"></span>
+                    <span class="ctrl-label">CADÊNCIA:</span>
+                    <strong class="text-green">Tempo Real 1.0x</strong>
+                </div>
+
+                <div class="bg-audit-status-pill" title="Todas as operações de fundo (I2C, FreeRTOS, Telemetria HTTP, Watchdog e SD Card) são gravadas continuamente em disco para diagnóstico posterior.">
+                    <span class="badge-dot dot-cyan blink-pulse"></span>
+                    <span class="ctrl-label">GRAVAÇÃO DE FUNDO:</span>
+                    <strong class="text-cyan">Ativa (logs/)</strong>
+                </div>
+            </div>
+
+            <div class="runtime-telemetry-status">
+                <!-- WATCHDOG STATUS (ESP-IDF) -->
+                <div class="runtime-item">
+                    <span class="item-title">Watchdog (15s):</span>
+                    <div class="wdt-bar-wrap">
+                        <div class="wdt-bar-fill" id="wdt-bar"></div>
+                    </div>
+                    <span class="item-val" id="wdt-val">15.0s</span>
+                </div>
+
+                <!-- FREE HEAP MEMORY -->
+                <div class="runtime-item">
+                    <span class="item-title">RAM Livre:</span>
+                    <strong class="item-val text-cyan" id="heap-val">184.3 KB</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCENARIOS & FAULT INJECTION TOOLBAR -->
+        <section class="scenarios-bar">
+            <div class="scen-group">
+                <span class="scenarios-title">CENÁRIOS AMBIENTAIS:</span>
+                <div class="scenarios-buttons">
+                    <button class="btn-scenario" data-scenario="clean_air" id="btn-scen-clean">🌿 Ar Limpo</button>
+                    <button class="btn-scenario" data-scenario="severe_pollution" id="btn-scen-polluted">🏭 Poluição Severa</button>
+                    <button class="btn-scenario" data-scenario="battery_critical" id="btn-scen-bat-low">🪫 Bateria Crítica (<3.2V)</button>
+                    <button class="btn-scenario" data-scenario="battery_full" id="btn-scen-bat-full">🔋 Bateria Plena (4V)</button>
+                    <button class="btn-scenario" data-scenario="cloud_offline" id="btn-scen-offline">🌐 Queda WiFi/Cloud</button>
+                    <button class="btn-scenario" data-scenario="cloud_restore" id="btn-scen-online">📶 Restaurar WiFi</button>
+                    <button class="btn-scenario btn-action" data-scenario="skip_warmup" id="btn-scen-warmup">⏭️ Pular Warmup</button>
+                    <button class="btn-scenario btn-action" data-scenario="toggle_ap_mode" id="btn-scen-ap">⚙️ Forçar Modo AP</button>
+                </div>
+            </div>
+
+            <div class="scen-group fault-group">
+                <span class="scenarios-title text-amber">INJEÇÃO DE FALHAS:</span>
+                <div class="scenarios-buttons">
+                    <button class="btn-fault" data-fault="scdFault" id="btn-fault-scd">⚠️ Falha SCD41 (NACK)</button>
+                    <button class="btn-fault" data-fault="pmFault" id="btn-fault-pm">⚠️ Falha PM (NACK)</button>
+                    <button class="btn-fault" data-fault="apiFault" id="btn-fault-api">⚠️ Erro HTTP 500 (Failover)</button>
+                    <button class="btn-fault" data-fault="taskStall" id="btn-fault-stall">💥 Travar Task (WDT Panic)</button>
+                    <button class="btn-scenario btn-test" id="btn-run-tests">🧪 Executar Testes C++</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- MAIN GRID LAYOUT -->
+        <main class="dashboard-grid">
+            <!-- LEFT COLUMN: HARDWARE & SENSOR CONTROLS -->
+            <div class="grid-column">
+                <!-- VIRTUAL ESP32-C6 BOARD VISUALIZER -->
+                <div class="glass-card hardware-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">⚡</span>
+                            <h2 class="card-title">Placa ESP32-C6 & Módulos de Hardware</h2>
+                        </div>
+                        <span class="chip-badge">RISC-V 160MHz | ESP-IDF v5</span>
+                    </div>
+
+                    <div class="hardware-visualizer">
+                        <!-- LED & PHYSICAL BUTTONS -->
+                        <div class="actuators-panel">
+                            <!-- NEOPIXEL RGB LED -->
+                            <div class="led-fixture">
+                                <div class="neopixel-glow" id="neopixel-ring">
+                                    <div class="neopixel-core" id="neopixel-core"></div>
+                                </div>
+                                <div class="led-meta">
+                                    <span class="led-title">NeoPixel RGB (Pino 8)</span>
+                                    <span class="led-color-name" id="neopixel-name">Azul Suave (Warmup)</span>
+                                    <span class="led-hex" id="neopixel-hex">#000032</span>
+                                </div>
+                            </div>
+
+                            <!-- EXTERNAL LED -->
+                            <div class="ext-led-fixture">
+                                <div class="ext-led-bulb" id="ext-led-bulb"></div>
+                                <div class="led-meta">
+                                    <span class="led-title">LED Externo (Pino 15)</span>
+                                    <span class="ext-led-status" id="ext-led-status">Inativo</span>
+                                </div>
+                            </div>
+
+                            <!-- CFG BUTTON (PIN 9) -->
+                            <div class="btn-fixture">
+                                <button class="hw-button" id="hw-btn-cfg">
+                                    <span class="btn-icon">🔘</span>
+                                    <span class="btn-text">Botão CFG (Pino 9)</span>
+                                </button>
+                                <div class="btn-meta">
+                                    <span class="btn-timer" id="btn-hold-timer">Solto</span>
+                                    <span class="btn-hint">>5s Modo AP | <2s Pula Warmup</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BUS & EXPANDER STATUS -->
+                        <div class="buses-panel">
+                            <div class="bus-subpanel">
+                                <span class="bus-label">Multiplexador I2C TCA9548A (0x70)</span>
+                                <div class="channels-grid">
+                                    <span class="ch-badge ch-active">CH0 (Livre)</span>
+                                    <span class="ch-badge ch-active">CH1 (Multigas)</span>
+                                    <span class="ch-badge ch-active">CH2 (Ozônio)</span>
+                                    <span class="ch-badge ch-active">CH3 (SCD41)</span>
+                                    <span class="ch-badge ch-active">CH4 (BME680)</span>
+                                    <span class="ch-badge ch-active">CH5 (PM HM3301)</span>
+                                    <span class="ch-badge ch-active">CH6 (Livre)</span>
+                                    <span class="ch-badge ch-active">CH7 (Livre)</span>
+                                </div>
+                            </div>
+
+                            <div class="bus-subpanel">
+                                <span class="bus-label">Expansor de Alimentação MCP23008 (0x20)</span>
+                                <div class="rails-grid">
+                                    <div class="rail-item" id="rail-scd"><span class="rail-dot"></span>SCD41 (P3)</div>
+                                    <div class="rail-item" id="rail-bme"><span class="rail-dot"></span>BME680 (P4)</div>
+                                    <div class="rail-item" id="rail-pm"><span class="rail-dot"></span>PM Sensor (P5)</div>
+                                    <div class="rail-item" id="rail-o3"><span class="rail-dot"></span>Ozônio (P2)</div>
+                                    <div class="rail-item" id="rail-gas"><span class="rail-dot"></span>Multigas (P1)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MODULAR SATELLITE PERIPHERALS CARD (PLUGGABLE & FAULT INJECTION) -->
+                <div class="glass-card satellites-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">🛰️</span>
+                            <div>
+                                <h2 class="card-title">Módulos Satélites Desacopláveis</h2>
+                                <span class="card-desc">Conexão a quente (Hot-plug) & Injeção de Falhas de Hardware</span>
+                            </div>
+                        </div>
+                        <span class="chip-badge chip-satellite">Barramentos: UART1 | SPI | I2C | ADC</span>
+                    </div>
+
+                    <div class="satellites-grid">
+                        <!-- 1. GPS MODULE -->
+                        <div class="satellite-unit" id="sat-unit-gps" data-sat="gps">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">🛰️</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">GPS NEO-6M</strong>
+                                        <span class="sat-bus">UART1 (RX 18 / TX 1)</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-gps">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Fluxo NMEA:</span>
+                                    <span class="sat-info-val text-green" id="sat-nmea-status">$GPRMC / $GPGGA (1Hz)</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Fix GPS:</span>
+                                    <span class="sat-info-val" id="sat-gps-fix">3D Fix (-3.7442, -38.5748)</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="gps" id="btn-sat-gps">Desconectar</button>
+                                <button class="btn-sat-fault" data-sat="gps" data-fault="NO_FIX" id="btn-sat-gps-nofix">Sem Fix</button>
+                            </div>
+                        </div>
+
+                        <!-- 2. SDCARD MODULE -->
+                        <div class="satellite-unit" id="sat-unit-sdcard" data-sat="sdcard">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">💾</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">MicroSD SPI</strong>
+                                        <span class="sat-bus">SPI (CS 7, MOSI 20, CLK 19, MISO 14)</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-sdcard">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Arquivo:</span>
+                                    <span class="sat-info-val" id="sat-sd-file">/datalog.csv (FAT32)</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Registros:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-sd-records">Ativo</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="sdcard" id="btn-sat-sdcard">Ejetar Cartão</button>
+                                <button class="btn-sat-fault" data-sat="sdcard" data-fault="IO_ERROR" id="btn-sat-sd-io">Erro I/O</button>
+                            </div>
+                        </div>
+
+                        <!-- 3. MODEM / WIFI MODULE -->
+                        <div class="satellite-unit" id="sat-unit-modem" data-sat="modem">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">📶</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">Modem / WiFi</strong>
+                                        <span class="sat-bus">RF 2.4GHz / HTTP Telemetria</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-modem">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Conexão:</span>
+                                    <span class="sat-info-val text-green" id="sat-modem-conn">Conectado (RSSI -64dBm)</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Fila RTOS:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-modem-queue">1 / 80 pacotes</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="modem" id="btn-sat-modem">Desconectar</button>
+                                <button class="btn-sat-fault" data-sat="modem" data-fault="HTTP_500_FAILOVER" id="btn-sat-modem-failover">Forçar Erro 500</button>
+                            </div>
+                        </div>
+
+                        <!-- 4. SCD41 MODULE -->
+                        <div class="satellite-unit" id="sat-unit-scd41" data-sat="scd41">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">🌡️</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">Sensirion SCD41</strong>
+                                        <span class="sat-bus">I2C Endereço 0x62</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-scd41">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Grandezas:</span>
+                                    <span class="sat-info-val">CO2 (NDIR), Temp, Umidade</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Leitura Atual:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-scd-readout">420 ppm | 25.5°C</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="scd41" id="btn-sat-scd41">Desconectar</button>
+                            </div>
+                        </div>
+
+                        <!-- 5. BME680 MODULE -->
+                        <div class="satellite-unit" id="sat-unit-bme680" data-sat="bme680">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">💨</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">Bosch BME680</strong>
+                                        <span class="sat-bus">I2C Endereço 0x77</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-bme680">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Grandezas:</span>
+                                    <span class="sat-info-val">Pressão, Gás VOC Res</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Leitura Atual:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-bme-readout">1013.25 hPa | 24.5 kΩ</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="bme680" id="btn-sat-bme680">Desconectar</button>
+                            </div>
+                        </div>
+
+                        <!-- 6. SEEED HM3301 (PM) MODULE -->
+                        <div class="satellite-unit" id="sat-unit-pm" data-sat="pm">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">🌪️</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">Seeed HM3301</strong>
+                                        <span class="sat-bus">I2C Endereço 0x19</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-pm">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Grandezas:</span>
+                                    <span class="sat-info-val">PM1.0, PM2.5, PM10 Laser</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Leitura Atual:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-pm-readout">14.2 µg/m³</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="pm" id="btn-sat-pm">Desconectar</button>
+                            </div>
+                        </div>
+
+                        <!-- 7. DFROBOT OZONE O3 MODULE -->
+                        <div class="satellite-unit" id="sat-unit-ozone" data-sat="ozone">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">☣️</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">DFRobot Ozone O3</strong>
+                                        <span class="sat-bus">I2C Endereço 0x73</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-ozone">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Grandezas:</span>
+                                    <span class="sat-info-val">Ozônio Atmosférico (ppb)</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Leitura Atual:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-ozone-readout">35 ppb</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="ozone" id="btn-sat-ozone">Desconectar</button>
+                            </div>
+                        </div>
+
+                        <!-- 8. SEEED GMXXX MULTIGAS MODULE -->
+                        <div class="satellite-unit" id="sat-unit-multigas" data-sat="multigas">
+                            <div class="sat-unit-top">
+                                <div class="sat-title-row">
+                                    <span class="sat-icon">🔥</span>
+                                    <div class="sat-meta">
+                                        <strong class="sat-name">Seeed Multigas</strong>
+                                        <span class="sat-bus">I2C Endereço 0x08</span>
+                                    </div>
+                                </div>
+                                <span class="sat-status-pill status-online" id="sat-status-multigas">ONLINE</span>
+                            </div>
+                            <div class="sat-unit-body">
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Grandezas:</span>
+                                    <span class="sat-info-val">CO, NO2, Etanol/VOC</span>
+                                </div>
+                                <div class="sat-info-row">
+                                    <span class="sat-info-label">Leitura Atual:</span>
+                                    <span class="sat-info-val text-cyan" id="sat-gas-readout">CO 1.20 | NO2 0.05</span>
+                                </div>
+                            </div>
+                            <div class="sat-unit-actions">
+                                <button class="btn-sat-toggle btn-sat-disconnect" data-sat="multigas" id="btn-sat-multigas">Desconectar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MODULAR SENSOR CONTROLS -->
+                <div class="glass-card sensors-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">🎛️</span>
+                            <h2 class="card-title">Módulos de Sensores Ambientais</h2>
+                        </div>
+                        <span class="sync-status">Injeção em Tempo Real</span>
+                    </div>
+
+                    <div class="sensors-grid">
+                        <!-- SENSIRION SCD41 -->
+                        <div class="sensor-module" id="mod-scd41">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">Sensirion SCD41 (0x62)</span>
+                                <span class="sensor-badge" id="badge-scd-status">I2C: OK</span>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-co2">Dióxido de Carbono (CO2):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-co2" min="350" max="2500" value="420" step="10">
+                                    <span class="val-display" id="val-co2">420 ppm</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-temp">Temperatura Interna:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-temp" min="-10" max="60" value="25.5" step="0.5">
+                                    <span class="val-display" id="val-temp">25.5 °C</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-hum">Umidade Relativa (RH):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-hum" min="0" max="100" value="58" step="1">
+                                    <span class="val-display" id="val-hum">58 %</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BOSCH BME680 -->
+                        <div class="sensor-module" id="mod-bme680">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">Bosch BME680 (0x77)</span>
+                                <span class="sensor-badge">Pressão & Gás</span>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-pres">Pressão Barométrica:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-pres" min="800" max="1100" value="1013.25" step="1">
+                                    <span class="val-display" id="val-pres">1013.25 hPa</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-gasres">Resistência de Gás VOC:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-gasres" min="1000" max="100000" value="24500" step="500">
+                                    <span class="val-display" id="val-gasres">24.5 kΩ</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PARTICULATE MATTER HM3301 / DFROBOT -->
+                        <div class="sensor-module" id="mod-pm">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">Partículas Suspensas (PM1 / PM2.5 / PM10)</span>
+                                <span class="sensor-badge" id="badge-pm-rail">Pwr: ON</span>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-pm1">PM 1.0:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-pm1" min="0" max="250" value="8.5" step="0.5">
+                                    <span class="val-display" id="val-pm1">8.5 µg/m³</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-pm25">PM 2.5:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-pm25" min="0" max="500" value="14.2" step="0.5">
+                                    <span class="val-display val-highlight" id="val-pm25">14.2 µg/m³</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-pm10">PM 10:</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-pm10" min="0" max="600" value="22.0" step="1">
+                                    <span class="val-display" id="val-pm10">22.0 µg/m³</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DFROBOT OZONE -->
+                        <div class="sensor-module" id="mod-o3">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">DFRobot Ozone O3 (0x73)</span>
+                                <span class="sensor-badge" id="badge-o3-rail">Pwr: ON</span>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-o3">Ozônio Atmosférico (O3):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-o3" min="0" max="250" value="35" step="1">
+                                    <span class="val-display" id="val-o3">35 ppb</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SEEED MULTICHANNEL GAS GMXXX -->
+                        <div class="sensor-module" id="mod-gas">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">Seeed GMXXX Multigas (0x08)</span>
+                                <span class="sensor-badge" id="badge-gas-rail">Pwr: ON</span>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-co">Monóxido de Carbono (CO):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-co" min="0" max="50" value="1.20" step="0.1">
+                                    <span class="val-display" id="val-co">1.20 ppm</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-no2">Dióxido de Nitrogênio (NO2):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-no2" min="0" max="10" value="0.05" step="0.01">
+                                    <span class="val-display" id="val-no2">0.05 ppm</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-voc">Compostos Orgânicos Voláteis (VOC):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-voc" min="0" max="30" value="0.85" step="0.05">
+                                    <span class="val-display" id="val-voc">0.85 ppm</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ANALOG SENSORS: BATTERY & NOISE -->
+                        <div class="sensor-module" id="mod-analog">
+                            <div class="sensor-module-header">
+                                <span class="sensor-name">Bateria & Sensor de Ruído (ADC)</span>
+                                <span class="sensor-badge">Pinos 4 & 5</span>
+                            </div>
+                            <div class="control-row">
+                                <div class="label-with-mode">
+                                    <label for="slider-vbat">Tensão de Bateria (ADC Pino 5):</label>
+                                    <span class="bat-mode-pill pill-full" id="bat-mode-tag">FULL (>3.50V)</span>
+                                </div>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-vbat" min="2.80" max="4.25" value="3.85" step="0.05">
+                                    <span class="val-display" id="val-vbat">3.85 V</span>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label for="slider-snd">Nível Sonoro / Ruído (ADC Pino 4):</label>
+                                <div class="input-with-val">
+                                    <input type="range" id="slider-snd" min="30" max="105" value="46.5" step="0.5">
+                                    <span class="val-display" id="val-snd">46.5 dB SPL</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: DIAGNOSTICS, TELEMETRY & JOURNAL -->
+            <div class="grid-column">
+                <!-- A POSTERIORI DIAGNOSTICS & METRICS CARD -->
+                <div class="glass-card diagnostics-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">📊</span>
+                            <h2 class="card-title">Métricas de Execução & Diagnóstico a Posteriori</h2>
+                        </div>
+                        <div class="export-actions">
+                            <button class="btn-export" id="btn-export-bg-trace" title="Baixar trilha contínua de auditoria em segundo plano (.log)">
+                                📜 Trilha de Fundo (.log)
+                            </button>
+                            <button class="btn-export" id="btn-export-bg-jsonl" title="Baixar fluxo de eventos em JSON Lines (.jsonl)">
+                                📄 Eventos (.jsonl)
+                            </button>
+                            <button class="btn-export" id="btn-export-diagnostics" title="Baixar relatório completo em JSON">
+                                📥 Exportar JSON
+                            </button>
+                            <button class="btn-export" id="btn-export-datalog" title="Baixar datalog.csv do Cartão SD">
+                                📥 Baixar CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AGGREGATE METRICS SUMMARY -->
+                    <div class="metrics-summary-grid">
+                        <div class="metric-card">
+                            <span class="metric-num text-green" id="met-success-rate">100%</span>
+                            <span class="metric-label">Taxa Sucesso Cloud</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-num text-cyan" id="met-total-acq">0</span>
+                            <span class="metric-label">Ciclos Coletados</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-num text-amber" id="met-sensor-errs">0</span>
+                            <span class="metric-label">Erros / NACKs I2C</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-num text-red" id="met-wdt-panics">0</span>
+                            <span class="metric-label">Panicos Watchdog</span>
+                        </div>
+                    </div>
+
+                    <!-- DIAGNOSTIC EVENT JOURNAL -->
+                    <div class="journal-wrapper">
+                        <div class="journal-header">
+                            <div class="journal-filters">
+                                <span class="journal-title">Diário de Eventos & Falhas:</span>
+                                <button class="btn-filter active" data-filter="ALL">Todos</button>
+                                <button class="btn-filter filter-err" data-filter="ERROR">Erros/Críticos</button>
+                                <button class="btn-filter filter-warn" data-filter="WARN">Avisos</button>
+                                <button class="btn-filter" data-filter="I2C">I2C</button>
+                                <button class="btn-filter" data-filter="CLOUD">Cloud</button>
+                            </div>
+                            <span class="journal-count" id="journal-count">0 eventos</span>
+                        </div>
+
+                        <div class="journal-table-wrap">
+                            <table class="journal-table" id="journal-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 80px;">Hora</th>
+                                        <th style="width: 85px;">Gravidade</th>
+                                        <th style="width: 85px;">Subsis.</th>
+                                        <th>Evento / Anomalia</th>
+                                        <th>Ação Executada</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="journal-tbody">
+                                    <!-- Dynamic diagnostic events -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CLOUD TELEMETRY INSPECTOR -->
+                <div class="glass-card cloud-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">☁️</span>
+                            <h2 class="card-title">Telemetria Cloud (API Vitae)</h2>
+                        </div>
+                        <div class="queue-counter">
+                            <span>Fila RTOS:</span>
+                            <strong id="queue-count">1/80</strong>
+                        </div>
+                    </div>
+
+                    <div class="telemetry-hud">
+                        <div class="telemetry-meta">
+                            <div class="meta-item">
+                                <span class="meta-lbl">Dispositivo:</span>
+                                <strong class="meta-val text-cyan" id="disp-dev-id">MOQA-INFRA-048</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-lbl">URL Primária:</span>
+                                <span class="meta-val url-val">https://api-vitae.infrasa.gov.br/telemetry</span>
+                            </div>
+                            <div class="meta-item-row">
+                                <div>
+                                    <span class="meta-lbl">Último Envio:</span>
+                                    <span class="meta-val" id="last-sent-time">--:--:--</span>
+                                </div>
+                                <div>
+                                    <span class="meta-lbl">Código HTTP:</span>
+                                    <span class="http-pill pill-200" id="http-code-tag">200 OK</span>
+                                </div>
+                                <div>
+                                    <span class="meta-lbl">Seq Number:</span>
+                                    <span class="meta-val" id="seq-num">#1</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PAYLOAD JSON CODE BLOCK -->
+                        <div class="payload-box">
+                            <div class="payload-header">
+                                <span>Payload JSON Enviado (HTTPS POST):</span>
+                                <button class="btn-copy" id="btn-copy-json">Copiar JSON</button>
+                            </div>
+                            <pre class="json-code" id="payload-json"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SERIAL MONITOR TERMINAL -->
+                <div class="glass-card terminal-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <span class="card-icon">💻</span>
+                            <h2 class="card-title">Monitor Serial (115200 Baud)</h2>
+                        </div>
+                        <button class="btn-clear" id="btn-clear-serial">Limpar</button>
+                    </div>
+
+                    <div class="terminal-body" id="serial-terminal">
+                        <!-- Stream of serial logs -->
+                    </div>
+
+                    <form class="terminal-input-bar" id="terminal-form">
+                        <span class="term-prompt">&gt;</span>
+                        <input type="text" id="terminal-cmd" placeholder="Digite um comando (ex: config, coleta, exit, http https://...)">
+                        <button type="submit" class="btn-send">Enviar</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL FOR C++ TEST RUNNER -->
+    <div class="modal-backdrop" id="test-modal" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <span class="card-icon">🧪</span>
+                    <h3 class="modal-title">Execução de Testes Nativos C++ (test_suites.exe)</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="test-progress" id="test-progress">
+                    <div class="spinner"></div>
+                    <span>Executando suite de testes de integração no emulador...</span>
+                </div>
+                <pre class="test-output-log" id="test-output-log"></pre>
+
+                <!-- TEST BACKGROUND AUDIT BANNER -->
+                <div class="test-audit-banner" id="test-audit-banner" style="display: none;">
+                    <div class="audit-banner-left">
+                        <span class="audit-banner-icon">🛡️</span>
+                        <div>
+                            <strong style="color: #67e8f9; font-size: 0.85rem;">Auditoria de Fundo Gravada com Sucesso</strong>
+                            <div style="font-size: 0.74rem; color: #94a3b8;">Trilha detalhada com todas as transações I2C, FreeRTOS e HTTP salva em disco:</div>
+                            <code id="test-audit-path" style="font-size: 0.72rem; color: #a5f3fc; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px;">logs/latest_test_execution.log</code>
+                        </div>
+                    </div>
+                    <div class="audit-banner-actions">
+                        <button class="btn-export" id="btn-download-test-log">📜 Baixar Trilha (.log)</button>
+                        <button class="btn-export" id="btn-download-test-json">📄 Baixar Trilha (.json)</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-scenario btn-action" id="btn-retest">Rodar Novamente</button>
+                <button class="btn-scenario" id="btn-modal-ok">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
