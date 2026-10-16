@@ -55,38 +55,6 @@ O emulador reproduz fielmente barramentos de comunicação físicos (**I2C com T
 
 ---
 
-## 🔒 Configuração de Segredos & Credenciais
-
-Por motivos de segurança e privacidade, **todas as credenciais reais (Wi-Fi, chaves de API, senhas e identificadores de dispositivos) são isoladas em arquivos privados ignorados pelo Git**.
-
-Para configurar seu ambiente local:
-
-1. **Credenciais para o Firmware C++**:
-   Copie o template de exemplo para o arquivo privado:
-   ```bash
-   cp config_secrets.example.h config_secrets.h
-   ```
-   Edite `config_secrets.h` preenchendo o seu SSID Wi-Fi, senha e chave de API.
-
-2. **Credenciais para o Web Dashboard (Node.js)**:
-   Copie o template JSON:
-   ```bash
-   cp config_secrets.example.json config_secrets.json
-   ```
-   Ajuste os parâmetros conforme seu ambiente de teste.
-
-3. **Lista de Dispositivos e Tokens**:
-   Copie o modelo de CSV:
-   ```bash
-   cp MOQAs.example.csv MOQAs.csv
-   ```
-   Adicione os IDs dos dispositivos e tokens da API que deseja testar.
-
-> [!NOTE]
-> Os arquivos `config_secrets.h`, `config_secrets.json` e `MOQAs.csv` estão configurados no `.gitignore` e **nunca** serão incluídos em commits do repositório.
-
----
-
 ## 🚀 Como Executar
 
 O projeto conta com o script de automação unificado `build.bat`:
